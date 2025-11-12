@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import ModeSelector from "./pages/ModeSelector";
 import PersonalDashboard from "./pages/dashboard/PersonalDashboard";
 import BusinessDashboard from "./pages/dashboard/BusinessDashboard";
+import Calendar from "./pages/Calendar";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/mode-selector" element={<ModeSelector />} />
           <Route path="/dashboard/personal" element={<PersonalDashboard />} />
           <Route path="/dashboard/business" element={<BusinessDashboard />} />
+          <Route path="/calendar" element={<Calendar />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Plus, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { ArrowLeft, Plus, TrendingUp, TrendingDown, Wallet, Calendar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const PersonalDashboard = () => {
@@ -34,10 +34,20 @@ const PersonalDashboard = () => {
             </div>
           </div>
           
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-[var(--shadow-soft)] hover:shadow-lg transition-all duration-300">
-            <Plus className="w-5 h-5 mr-2" />
-            Nova Transação
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => navigate("/calendar")}
+              variant="outline"
+              className="rounded-xl shadow-[var(--shadow-soft)] hover:shadow-lg transition-all duration-300"
+            >
+              <Calendar className="w-5 h-5 mr-2" />
+              Calendário
+            </Button>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-[var(--shadow-soft)] hover:shadow-lg transition-all duration-300">
+              <Plus className="w-5 h-5 mr-2" />
+              Nova Transação
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
