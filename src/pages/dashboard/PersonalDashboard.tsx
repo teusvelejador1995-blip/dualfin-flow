@@ -1,146 +1,354 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Plus, TrendingUp, TrendingDown, Wallet, Calendar } from "lucide-react";
+import { ArrowLeft, Calendar as CalendarIcon, Plus, ArrowUpCircle, ArrowDownCircle, Wallet, CheckCircle2, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { TransactionTypeSelector } from "@/components/transactions/TransactionTypeSelector";
+import { TransactionDialog } from "@/components/transactions/TransactionDialog";
+import { TransactionType } from "@/contexts/DataContext";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 
 const PersonalDashboard = () => {
   const navigate = useNavigate();
-  const [balance] = useState(5420.50);
-  const [income] = useState(8500.00);
-  const [expenses] = useState(3079.50);
+  const { user } = useAuth();
+  const { transactions, getBalance, setBalance, addTransaction, updateTransaction } = useData();
+  const { toast } = useToast();
+  const [typeSelectorOpen, setTypeSelectorOpen] = useState(false);
+  const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState<TransactionType>("income");
+  const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
+  const [newBalance, setNewBalance] = useState("");
+
+  const currentBalance = getBalance("personal");
+
+  // Filtrar transações do modo pessoal
+  const personalTransactions = useMemo(() => {
+    return transactions.filter((t) => t.mode === "personal");
+  }, [transactions]);
+
+  // Calcular entradas e saídas confirmadas do mês atual
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  const monthlyStats = useMemo(() => {
+    const confirmedTransactions = personalTransactions.filter((t) => {
+      const date = new Date(t.date);
+      return (
+        t.status === "confirmed" &&
+        date.getMonth() === currentMonth &&
+        date.getFullYear() === currentYear
+      );
+    });
+
+    const income = confirmedTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.value, 0);
+
+    const expenses = confirmedTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.value, 0);
+
+    return { income, expenses };
+  }, [personalTransactions, currentMonth, currentYear]);
+
+  // Calcular saldo real baseado no saldo inicial + entradas - saídas confirmadas
+  const calculatedBalance = useMemo(() => {
+    const confirmedTransactions = personalTransactions.filter((t) => t.status === "confirmed");
+    
+    const totalIncome = confirmedTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.value, 0);
+
+    const totalExpenses = confirmedTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.value, 0);
+
+    return currentBalance + totalIncome - totalExpenses;
+  }, [personalTransactions, currentBalance]);
+
+  const handleSelectType = (type: TransactionType) => {
+    setSelectedType(type);
+    setTransactionDialogOpen(true);
+  };
+
+  const handleSaveTransaction = (data: any) => {
+    addTransaction(data);
+    toast({
+      title: "Transação cadastrada!",
+      description: `${data.type === "income" ? "Entrada" : "Despesa"} registrada com sucesso`,
+    });
+  };
+
+  const handleToggleStatus = (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === "pending" ? "confirmed" : "pending";
+    updateTransaction(id, { status: newStatus });
+    toast({
+      title: newStatus === "confirmed" ? "Transação confirmada" : "Transação marcada como pendente",
+    });
+  };
+
+  const handleUpdateBalance = () => {
+    const value = parseFloat(newBalance);
+    if (isNaN(value)) {
+      toast({
+        title: "Valor inválido",
+        description: "Por favor, insira um valor numérico válido",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBalance("personal", value);
+    setBalanceDialogOpen(false);
+    setNewBalance("");
+    toast({
+      title: "Saldo atualizado!",
+      description: "O saldo inicial foi atualizado com sucesso",
+    });
+  };
+
+  // Ordenar transações por data (mais recentes primeiro)
+  const sortedTransactions = useMemo(() => {
+    return [...personalTransactions]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 10); // Mostrar apenas as 10 mais recentes
+  }, [personalTransactions]);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+        <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/mode-selector")}
-              className="rounded-xl"
+              className="rounded-full"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground">
-                Modo Pessoa Física
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Visão geral das suas finanças pessoais
-              </p>
+              <h1 className="text-3xl font-bold text-foreground">Modo Pessoa Física</h1>
+              {user && <p className="text-muted-foreground">Olá, {user.name}</p>}
             </div>
           </div>
-          
+
           <div className="flex gap-3">
             <Button
-              onClick={() => navigate("/calendar")}
               variant="outline"
-              className="rounded-xl shadow-[var(--shadow-soft)] hover:shadow-lg transition-all duration-300"
+              onClick={() => navigate("/calendar")}
+              className="rounded-xl"
             >
-              <Calendar className="w-5 h-5 mr-2" />
+              <CalendarIcon className="w-4 h-4 mr-2" />
               Calendário
             </Button>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-[var(--shadow-soft)] hover:shadow-lg transition-all duration-300">
-              <Plus className="w-5 h-5 mr-2" />
+            <Button
+              onClick={() => setTypeSelectorOpen(true)}
+              className="rounded-xl"
+            >
+              <Plus className="w-4 h-4 mr-2" />
               Nova Transação
             </Button>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
-          {/* Saldo */}
-          <Card className="p-6 rounded-2xl shadow-[var(--shadow-card)] border-border bg-gradient-to-br from-primary to-primary-glow">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-primary-foreground/20 flex items-center justify-center">
-                <Wallet className="w-6 h-6 text-primary-foreground" />
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
+          <Card className="p-6 hover:shadow-[var(--shadow-soft)] transition-all duration-300 cursor-pointer" onClick={() => setBalanceDialogOpen(true)}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Wallet className="w-6 h-6 text-primary" />
               </div>
+              <span className="text-xs text-muted-foreground">Clique para editar</span>
             </div>
-            <p className="text-primary-foreground/80 text-sm mb-2">Saldo Atual</p>
-            <p className="text-3xl font-bold text-primary-foreground">
-              R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            <h3 className="text-sm text-muted-foreground mb-1">Saldo Atual</h3>
+            <p className="text-2xl font-bold text-card-foreground">
+              {calculatedBalance.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
             </p>
           </Card>
 
-          {/* Entradas */}
-          <Card className="p-6 rounded-2xl shadow-[var(--shadow-card)] border-border">
-            <div className="flex items-start justify-between mb-4">
+          <Card className="p-6 hover:shadow-[var(--shadow-soft)] transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-success" />
+                <ArrowUpCircle className="w-6 h-6 text-success" />
               </div>
             </div>
-            <p className="text-muted-foreground text-sm mb-2">Entradas do Mês</p>
-            <p className="text-3xl font-bold text-card-foreground">
-              R$ {income.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            <h3 className="text-sm text-muted-foreground mb-1">Entradas do Mês</h3>
+            <p className="text-2xl font-bold text-success">
+              {monthlyStats.income.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
             </p>
-            <p className="text-success text-sm mt-2">+12% vs mês anterior</p>
           </Card>
 
-          {/* Saídas */}
-          <Card className="p-6 rounded-2xl shadow-[var(--shadow-card)] border-border">
-            <div className="flex items-start justify-between mb-4">
+          <Card className="p-6 hover:shadow-[var(--shadow-soft)] transition-all duration-300">
+            <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center">
-                <TrendingDown className="w-6 h-6 text-destructive" />
+                <ArrowDownCircle className="w-6 h-6 text-destructive" />
               </div>
             </div>
-            <p className="text-muted-foreground text-sm mb-2">Saídas do Mês</p>
-            <p className="text-3xl font-bold text-card-foreground">
-              R$ {expenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            <h3 className="text-sm text-muted-foreground mb-1">Saídas do Mês</h3>
+            <p className="text-2xl font-bold text-destructive">
+              {monthlyStats.expenses.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
             </p>
-            <p className="text-destructive text-sm mt-2">-5% vs mês anterior</p>
           </Card>
         </div>
 
         {/* Recent Transactions */}
-        <Card className="p-6 rounded-2xl shadow-[var(--shadow-card)] border-border animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
-          <h2 className="text-xl font-bold text-card-foreground mb-6">
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold text-card-foreground mb-4">
             Transações Recentes
           </h2>
-          
-          <div className="space-y-4">
-            {[
-              { name: "Salário", amount: 5000, type: "income", date: "01/11/2025" },
-              { name: "Freelance Design", amount: 1500, type: "income", date: "15/11/2025" },
-              { name: "Supermercado", amount: -450.50, type: "expense", date: "10/11/2025" },
-              { name: "Aluguel", amount: -1200, type: "expense", date: "05/11/2025" },
-            ].map((transaction, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors duration-200"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    transaction.type === "income" 
-                      ? "bg-success/10" 
-                      : "bg-destructive/10"
-                  }`}>
-                    {transaction.type === "income" ? (
-                      <TrendingUp className="w-5 h-5 text-success" />
-                    ) : (
-                      <TrendingDown className="w-5 h-5 text-destructive" />
-                    )}
+
+          {sortedTransactions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Nenhuma transação cadastrada</p>
+              <p className="text-sm mt-2">Clique em "Nova Transação" para começar</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sortedTransactions.map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className={`flex items-center justify-between p-4 rounded-xl border transition-all duration-200 hover:shadow-sm ${
+                    transaction.status === "confirmed"
+                      ? "bg-card border-border"
+                      : "bg-muted/30 border-muted"
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        transaction.type === "income"
+                          ? "bg-success/10"
+                          : "bg-destructive/10"
+                      }`}
+                    >
+                      {transaction.type === "income" ? (
+                        <ArrowUpCircle className="w-5 h-5 text-success" />
+                      ) : (
+                        <ArrowDownCircle className="w-5 h-5 text-destructive" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium text-card-foreground">
+                        {transaction.description}
+                      </p>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>
+                          {format(new Date(transaction.date), "dd/MM/yyyy", {
+                            locale: ptBR,
+                          })}
+                        </span>
+                        {transaction.recurrence !== "once" && (
+                          <span className="px-2 py-0.5 bg-accent rounded-md text-xs">
+                            {transaction.recurrence === "monthly" ? "Mensal" : "Anual"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-card-foreground">{transaction.name}</p>
-                    <p className="text-sm text-muted-foreground">{transaction.date}</p>
+                  <div className="flex items-center gap-3">
+                    <p
+                      className={`text-lg font-semibold ${
+                        transaction.type === "income"
+                          ? "text-success"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {transaction.type === "income" ? "+" : "-"}
+                      {transaction.value.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleToggleStatus(transaction.id, transaction.status)}
+                      className="rounded-full"
+                    >
+                      {transaction.status === "confirmed" ? (
+                        <CheckCircle2 className="w-5 h-5 text-success" />
+                      ) : (
+                        <Clock className="w-5 h-5 text-muted-foreground" />
+                      )}
+                    </Button>
                   </div>
                 </div>
-                <p className={`font-bold text-lg ${
-                  transaction.type === "income" 
-                    ? "text-success" 
-                    : "text-destructive"
-                }`}>
-                  {transaction.amount > 0 ? "+" : ""}
-                  R$ {Math.abs(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
+
+      {/* Dialogs */}
+      <TransactionTypeSelector
+        open={typeSelectorOpen}
+        onOpenChange={setTypeSelectorOpen}
+        onSelectType={handleSelectType}
+      />
+
+      <TransactionDialog
+        open={transactionDialogOpen}
+        onOpenChange={setTransactionDialogOpen}
+        mode="personal"
+        type={selectedType}
+        onSave={handleSaveTransaction}
+      />
+
+      <Dialog open={balanceDialogOpen} onOpenChange={setBalanceDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Editar Saldo Inicial</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="balance">Novo Saldo</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  R$
+                </span>
+                <Input
+                  id="balance"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  className="pl-10"
+                  value={newBalance}
+                  onChange={(e) => setNewBalance(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                O saldo atual é calculado automaticamente: Saldo Inicial + Entradas - Saídas confirmadas
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setBalanceDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button className="flex-1" onClick={handleUpdateBalance}>
+              Salvar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,18 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TrendingUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { login, signup, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (user) {
+      navigate("/mode-selector");
+    }
+  }, [user, navigate]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
@@ -24,13 +35,68 @@ const Login = () => {
       return;
     }
 
-    // Simulação de login - em produção, conectar com backend
-    toast({
-      title: "Login realizado!",
-      description: "Bem-vindo ao DualFin",
-    });
+    const result = await login(email, password);
     
-    navigate("/mode-selector");
+    if (result.success) {
+      toast({
+        title: "Login realizado!",
+        description: "Bem-vindo ao DualFin",
+      });
+      navigate("/mode-selector");
+    } else {
+      toast({
+        title: "Erro ao fazer login",
+        description: result.error,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email || !password || !name || !confirmPassword) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, preencha todos os campos",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast({
+        title: "Senhas não conferem",
+        description: "As senhas digitadas não são iguais",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        title: "Senha muito curta",
+        description: "A senha deve ter no mínimo 6 caracteres",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const result = await signup(email, password, name);
+    
+    if (result.success) {
+      toast({
+        title: "Conta criada com sucesso!",
+        description: "Bem-vindo ao DualFin",
+      });
+      navigate("/mode-selector");
+    } else {
+      toast({
+        title: "Erro ao criar conta",
+        description: result.error,
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -43,46 +109,112 @@ const Login = () => {
               <TrendingUp className="w-8 h-8 text-primary-foreground" />
             </div>
             <h1 className="text-3xl font-bold text-card-foreground">DualFin</h1>
-            <p className="text-muted-foreground mt-2">Entre na sua conta</p>
+            <p className="text-muted-foreground mt-2">Gerencie suas finanças</p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-card-foreground">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-background border-input rounded-xl h-12 focus:ring-primary"
-              />
-            </div>
+          {/* Tabs */}
+          <Tabs defaultValue="login" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="login">Entrar</TabsTrigger>
+              <TabsTrigger value="signup">Criar conta</TabsTrigger>
+            </TabsList>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-card-foreground">
-                Senha
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="bg-background border-input rounded-xl h-12 focus:ring-primary"
-              />
-            </div>
+            {/* Login Form */}
+            <TabsContent value="login">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="login-email">Email</Label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="rounded-xl h-12"
+                  />
+                </div>
 
-            <Button
-              type="submit"
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl h-12 font-semibold shadow-[var(--shadow-soft)] hover:shadow-lg transition-all duration-300"
-            >
-              Entrar
-            </Button>
-          </form>
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Senha</Label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="rounded-xl h-12"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full rounded-xl h-12 font-semibold shadow-[var(--shadow-soft)] hover:shadow-lg transition-all duration-300"
+                >
+                  Entrar
+                </Button>
+              </form>
+            </TabsContent>
+
+            {/* Signup Form */}
+            <TabsContent value="signup">
+              <form onSubmit={handleSignup} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-name">Nome</Label>
+                  <Input
+                    id="signup-name"
+                    type="text"
+                    placeholder="Seu nome"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="rounded-xl h-12"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-email">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="rounded-xl h-12"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Senha</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="rounded-xl h-12"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirmar senha</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="rounded-xl h-12"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full rounded-xl h-12 font-semibold shadow-[var(--shadow-soft)] hover:shadow-lg transition-all duration-300"
+                >
+                  Criar conta
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
 
           {/* Footer */}
           <div className="mt-6 text-center">

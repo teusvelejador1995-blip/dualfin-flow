@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -27,43 +27,27 @@ import CompleteEventDialog from "@/components/calendar/CompleteEventDialog";
 import YearView from "@/components/calendar/YearView";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-
-interface CalendarEvent {
-  id: string;
-  date: Date;
-  name: string;
-  expectedProfit: number;
-  actualProfit?: number;
-  description?: string;
-  completed: boolean;
-}
+import { useData } from "@/contexts/DataContext";
 
 const Calendar = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { events: dataEvents, addEvent, updateEvent, deleteEvent, completeEvent } = useData();
   const [viewMode, setViewMode] = useState<"month" | "year">("month");
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>([
-    {
-      id: "1",
-      date: new Date(2025, 10, 20),
-      name: "Casamento Silva",
-      expectedProfit: 5000,
-      completed: false,
-    },
-    {
-      id: "2",
-      date: new Date(2025, 10, 25),
-      name: "Aniversário 15 anos",
-      expectedProfit: 3500,
-      completed: false,
-    },
-  ]);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+
+  // Converter eventos do contexto para o formato do calendário
+  const events = useMemo(() => {
+    return dataEvents.map((e) => ({
+      ...e,
+      date: new Date(e.date),
+    }));
+  }, [dataEvents]);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -77,12 +61,17 @@ const Calendar = () => {
     expectedProfit: number;
     description?: string;
   }) => {
-    const newEvent: CalendarEvent = {
-      id: Date.now().toString(),
-      ...eventData,
-      completed: false,
-    };
-    setEvents([...events, newEvent]);
+    addEvent({
+      date: eventData.date.toISOString(),
+      name: eventData.name,
+      expectedProfit: eventData.expectedProfit,
+      description: eventData.description,
+    });
+    
+    toast({
+      title: "Evento criado!",
+      description: "O evento foi adicionado ao calendário",
+    });
   };
 
   const handleEditEvent = (eventId: string, updatedData: {
@@ -91,17 +80,23 @@ const Calendar = () => {
     expectedProfit: number;
     description?: string;
   }) => {
-    setEvents(events.map(event =>
-      event.id === eventId
-        ? { ...event, ...updatedData }
-        : event
-    ));
+    updateEvent(eventId, {
+      date: updatedData.date.toISOString(),
+      name: updatedData.name,
+      expectedProfit: updatedData.expectedProfit,
+      description: updatedData.description,
+    });
+    
+    toast({
+      title: "Evento atualizado!",
+      description: "As alterações foram salvas",
+    });
   };
 
   const handleDeleteEvent = () => {
     if (!selectedEvent) return;
     
-    setEvents(events.filter(event => event.id !== selectedEvent.id));
+    deleteEvent(selectedEvent.id);
     setDeleteDialogOpen(false);
     setSelectedEvent(null);
     
@@ -112,11 +107,12 @@ const Calendar = () => {
   };
 
   const handleCompleteEvent = (eventId: string, actualProfit: number) => {
-    setEvents(events.map(event => 
-      event.id === eventId 
-        ? { ...event, completed: true, actualProfit }
-        : event
-    ));
+    completeEvent(eventId, actualProfit);
+    
+    toast({
+      title: "Evento finalizado!",
+      description: "O lucro foi registrado e uma entrada foi criada automaticamente",
+    });
   };
 
   const getEventsForDay = (day: Date) => {
@@ -441,47 +437,52 @@ const Calendar = () => {
             </Card>
           </div>
         )}
+
+        {/* Dialogs */}
+        <EventDialog
+          open={eventDialogOpen}
+          onOpenChange={setEventDialogOpen}
+          onSave={handleSaveEvent}
+        />
+
+        {selectedEvent && (
+          <>
+            <EditEventDialog
+              open={editDialogOpen}
+              onOpenChange={setEditDialogOpen}
+              event={selectedEvent}
+              onSave={handleEditEvent}
+            />
+
+            <CompleteEventDialog
+              open={completeDialogOpen}
+              onOpenChange={setCompleteDialogOpen}
+              event={selectedEvent}
+              onComplete={handleCompleteEvent}
+            />
+          </>
+        )}
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent className="rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir evento?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. O evento será permanentemente removido do calendário.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleDeleteEvent}
+                className="rounded-xl bg-destructive hover:bg-destructive/90"
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
-
-      <EventDialog
-        open={eventDialogOpen}
-        onOpenChange={setEventDialogOpen}
-        onSave={handleSaveEvent}
-      />
-
-      <EditEventDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        event={selectedEvent}
-        onSave={handleEditEvent}
-      />
-
-      <CompleteEventDialog
-        open={completeDialogOpen}
-        onOpenChange={setCompleteDialogOpen}
-        event={selectedEvent}
-        onComplete={handleCompleteEvent}
-      />
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir o evento "{selectedEvent?.name}"? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteEvent}
-              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-xl"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
